@@ -15,16 +15,21 @@ async function setup() {
     // Step 1: Connect WITHOUT selecting a DB first
     connection = await mysql.createConnection({
       host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT) || 3306,
       user: process.env.DB_USER || 'root',
-      password: process.env.DB_PASSWORD || '',
+      password: process.env.DB_PASSWORD || '9443',
       multipleStatements: true,
+      ssl: process.env.DB_HOST !== 'localhost' ? { rejectUnauthorized: false } : false,
     });
     console.log('✅ Connected to MySQL\n');
 
-    // Step 2: Create DB and switch to it (use query, not execute)
-    await connection.query('CREATE DATABASE IF NOT EXISTS hospital_rms');
-    await connection.query('USE hospital_rms');
-    console.log('✅ Database "hospital_rms" ready\n');
+    // Step 2: Create DB if local, or just USE it if on Railway
+    const dbName = process.env.DB_NAME || 'hospital_rms';
+    if (!process.env.DB_NAME || process.env.DB_NAME === 'hospital_rms') {
+      await connection.query(`CREATE DATABASE IF NOT EXISTS ${dbName}`);
+    }
+    await connection.query(`USE ${dbName}`);
+    console.log(`✅ Database "${dbName}" ready\n`);
 
     // Step 3: Create all tables
     await connection.query(`
