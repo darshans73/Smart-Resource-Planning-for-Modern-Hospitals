@@ -67,4 +67,37 @@ router.get('/me', authMiddleware, async (req, res) => {
   }
 });
 
+// ONE-TIME SETUP: POST /api/auth/seed-users
+// Seeds admin/doctor/nurse/reception users with correct bcrypt hashes
+// DELETE THIS ENDPOINT AFTER FIRST USE
+router.post('/seed-users', async (req, res) => {
+  try {
+    const { secret } = req.body;
+    if (secret !== 'SETUP_SECRET_2024') {
+      return res.status(403).json({ success: false, message: 'Forbidden.' });
+    }
+
+    const hash = await bcrypt.hash('Admin@123', 10);
+
+    await db.query(`DELETE FROM users WHERE email IN (
+      'admin@hospital.com','doctor@hospital.com',
+      'nurse@hospital.com','reception@hospital.com'
+    )`);
+
+    await db.query(`
+      INSERT INTO users (name, email, password, role, department, phone, is_active) VALUES
+      ('Super Admin',     'admin@hospital.com',     ?, 'admin',     'Administration', '9876543210', 1),
+      ('Dr. Rajesh Kumar','doctor@hospital.com',    ?, 'doctor',    'Cardiology',     '9876543211', 1),
+      ('Nurse Priya',     'nurse@hospital.com',     ?, 'nurse',     'ICU',            '9876543212', 1),
+      ('Reception Staff', 'reception@hospital.com', ?, 'reception', 'Reception',      '9876543213', 1)
+    `, [hash, hash, hash, hash]);
+
+    console.log('[SEED] Users seeded successfully with fresh bcrypt hash');
+    return res.json({ success: true, message: 'Users seeded! Login with Admin@123' });
+  } catch (err) {
+    console.error('[SEED] Error:', err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 module.exports = router;
