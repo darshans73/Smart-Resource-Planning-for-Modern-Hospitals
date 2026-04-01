@@ -9,15 +9,31 @@ require('dotenv').config();
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
+
+    console.log('[LOGIN] Attempt - email:', email, '| password length:', password?.length);
+
     if (!email || !password)
       return res.status(400).json({ success: false, message: 'Email and password are required.' });
 
-    const [rows] = await db.query('SELECT * FROM users WHERE email = ? AND is_active = 1', [email]);
-    if (rows.length === 0)
+    const [rows] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
+    console.log('[LOGIN] Users found with email (ignoring is_active):', rows.length);
+
+    if (rows.length === 0) {
+      console.log('[LOGIN] FAIL - No user found with email:', email);
       return res.status(401).json({ success: false, message: 'Invalid email or password.' });
+    }
 
     const user = rows[0];
+    console.log('[LOGIN] User found - id:', user.id, '| is_active:', user.is_active, '| hash starts with:', user.password?.substring(0, 10));
+
+    if (!user.is_active) {
+      console.log('[LOGIN] FAIL - User is_active is falsy:', user.is_active);
+      return res.status(401).json({ success: false, message: 'Account is disabled.' });
+    }
+
     const isMatch = await bcrypt.compare(password, user.password);
+    console.log('[LOGIN] bcrypt.compare result:', isMatch);
+
     if (!isMatch)
       return res.status(401).json({ success: false, message: 'Invalid email or password.' });
 
@@ -34,7 +50,7 @@ router.post('/login', async (req, res) => {
       user: { id: user.id, name: user.name, email: user.email, role: user.role, department: user.department }
     });
   } catch (err) {
-    console.error('Login error:', err);
+    console.error('[LOGIN] Server error:', err);
     res.status(500).json({ success: false, message: 'Server error.' });
   }
 });
