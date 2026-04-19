@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { getAllocations, createAllocation, releaseAllocation, getPatients, getResources } from '../services/api';
+import { getAllocations, createAllocation, releaseAllocation, getPatients, getResources, getSmartAllocation, broadcastEmergency } from '../services/api';
+import { io } from 'socket.io-client';
+import { toast } from 'react-toastify';
 
 const AllocationsPage = () => {
   const [allocations, setAllocations] = useState([]);
@@ -10,6 +12,36 @@ const AllocationsPage = () => {
   const [form, setForm] = useState({ patient_id: '', resource_id: '', start_time: new Date().toISOString().slice(0, 16), notes: '' });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+
+  const handleAiAllocate = async () => {
+    if (!form.patient_id) {
+      setError('Please select a patient first.');
+      return;
+    }
+    setAiLoading(true); setError('');
+    try {
+      const res = await getSmartAllocation({ patientId: form.patient_id, resourceType: 'ICU Bed' });
+      if (res.data.success && res.data.recommended) {
+        setForm(f => ({ ...f, resource_id: res.data.recommended.id }));
+        setSuccess('🤖 ' + res.data.message + ' (Selected: ' + res.data.recommended.resource_name + ')');
+        setTimeout(() => setSuccess(''), 5000);
+      } else {
+         const res2 = await getSmartAllocation({ patientId: form.patient_id, resourceType: 'General Bed' });
+         if (res2.data.success && res2.data.recommended) {
+           setForm(f => ({ ...f, resource_id: res2.data.recommended.id }));
+           setSuccess('🤖 AI assigned alternative: ' + res2.data.recommended.resource_name);
+           setTimeout(() => setSuccess(''), 5000);
+         } else {
+           setError('AI could not find suitable available beds.');
+         }
+      }
+    } catch(err) {
+      setError('AI Request Failed.');
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   const load = () => {
     setLoading(true);
@@ -21,7 +53,30 @@ const AllocationsPage = () => {
       }).finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { 
+    load(); 
+    
+    // Real-Time Socket Connection
+    const socket = io(process.env.REACT_APP_API_URL || 'http://localhost:5000');
+    
+    socket.on('resource_updated', (data) => {
+      // Background silent refresh of data table
+      Promise.all([getAllocations(), getPatients({ status: 'admitted' }), getResources({ status: 'Available' })])
+      .then(([aRes, pRes, rRes]) => {
+        setAllocations(aRes.data.data);
+        setPatients(pRes.data.data);
+        setResources(rRes.data.data.filter(r => ['ICU Bed', 'General Bed'].includes(r.type)));
+      });
+
+      if(data.action === 'allocated') {
+          toast.info('📡 Remote Update: A bed was just assigned.', { theme: "dark" });
+      } else {
+          toast.success('📡 Remote Update: A bed was instantly released!', { theme: "dark" });
+      }
+    });
+
+    return () => socket.disconnect();
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault(); setError('');
@@ -51,9 +106,16 @@ const AllocationsPage = () => {
           <div className="page-title">Bed Allocation</div>
           <div className="page-subtitle">{active.length} beds currently occupied</div>
         </div>
-        <button className="btn btn-primary" onClick={() => { setModal(true); setError(''); setForm({ patient_id: '', resource_id: '', start_time: new Date().toISOString().slice(0, 16), notes: '' }); }}>
-          + Assign Bed
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button className="btn" style={{ background: 'var(--danger)', color: 'white', fontWeight: 'bold' }} onClick={async () => {
+             await broadcastEmergency({ alertType: 'Code Blue', message: 'Urgent ICU Allocation Needed on Floor 3!' });
+          }}>
+            🚨 Code Blue (Push Notification)
+          </button>
+          <button className="btn btn-primary" onClick={() => { setModal(true); setError(''); setForm({ patient_id: '', resource_id: '', start_time: new Date().toISOString().slice(0, 16), notes: '' }); }}>
+            + Assign Bed
+          </button>
+        </div>
       </div>
 
       {success && <div className="alert alert-success">✅ {success}</div>}
@@ -152,7 +214,12 @@ const AllocationsPage = () => {
                   </select>
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Bed *</label>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <label className="form-label" style={{ marginBottom: 0 }}>Bed *</label>
+                    <button type="button" onClick={handleAiAllocate} disabled={aiLoading} style={{ background: 'var(--primary-light)', color: 'var(--primary)', border: '1px solid var(--primary)', padding: '2px 8px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' }}>
+                      {aiLoading ? '🤖 Thinking...' : '✨ Auto-Select Best'}
+                    </button>
+                  </div>
                   <select className="form-control" value={form.resource_id} onChange={e => setForm(f => ({ ...f, resource_id: e.target.value }))} required>
                     <option value="">— Select Available Bed —</option>
                     {resources.map(r => <option key={r.id} value={r.id}>{r.resource_name} ({r.type}) — {r.location || 'N/A'}</option>)}

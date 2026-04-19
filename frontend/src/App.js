@@ -1,6 +1,9 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+import { io } from 'socket.io-client';
 import Sidebar from './components/Sidebar';
 import LoginPage from './pages/LoginPage';
 import Dashboard from './pages/Dashboard';
@@ -11,6 +14,8 @@ import SurgeriesPage from './pages/SurgeriesPage';
 import EquipmentPage from './pages/EquipmentPage';
 import ReportsPage from './pages/ReportsPage';
 import UsersPage from './pages/UsersPage';
+import PredictionsPage from './pages/PredictionsPage';
+import FloorPlanPage from './pages/FloorPlanPage';
 import './index.css';
 
 // Protected route wrapper
@@ -98,6 +103,18 @@ const AppRoutes = () => {
         </ProtectedRoute>
       } />
 
+      <Route path="/ai-predictions" element={
+        <ProtectedRoute allowedRoles={['admin', 'doctor', 'nurse', 'reception']}>
+          <AppLayout><PredictionsPage /></AppLayout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/floor-plan" element={
+        <ProtectedRoute allowedRoles={['admin', 'doctor', 'nurse', 'reception']}>
+          <AppLayout><FloorPlanPage /></AppLayout>
+        </ProtectedRoute>
+      } />
+
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
@@ -105,9 +122,24 @@ const AppRoutes = () => {
 };
 
 function App() {
+  React.useEffect(() => {
+    const socket = io(process.env.REACT_APP_API_URL || 'http://localhost:5000');
+    
+    socket.on('emergency_alert', (data) => {
+      toast.error(`🚨 CODE BLUE: ${data.message}`, {
+        position: "top-right",
+        autoClose: false,
+        theme: "colored",
+      });
+    });
+
+    return () => socket.disconnect();
+  }, []);
+
   return (
     <AuthProvider>
       <Router>
+        <ToastContainer />
         <AppRoutes />
       </Router>
     </AuthProvider>

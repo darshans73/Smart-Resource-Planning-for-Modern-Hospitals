@@ -7,8 +7,10 @@ const navItems = [
   { to: '/resources', icon: '🏗️', label: 'Resources', roles: ['admin','doctor','nurse','reception'] },
   { to: '/patients', icon: '👥', label: 'Patients', roles: ['admin','doctor','nurse','reception'] },
   { to: '/allocations', icon: '🛏️', label: 'Bed Allocation', roles: ['admin','reception'] },
+  { to: '/floor-plan', icon: '🗺️', label: 'Interactive MAP', roles: ['admin','doctor','nurse','reception'] },
   { to: '/surgeries', icon: '🔬', label: 'OT Scheduling', roles: ['admin','doctor','nurse'] },
   { to: '/equipment', icon: '⚕️', label: 'Equipment', roles: ['admin','doctor','nurse'] },
+  { to: '/ai-predictions', icon: '🤖', label: 'AI Predictor', roles: ['admin','doctor','nurse','reception'] },
   { to: '/reports', icon: '📈', label: 'Reports', roles: ['admin'] },
   { to: '/users', icon: '👤', label: 'User Management', roles: ['admin'] },
 ];

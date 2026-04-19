@@ -56,6 +56,8 @@ router.post('/', authMiddleware, async (req, res) => {
     // Update resource status
     await db.query("UPDATE resources SET status='In Use', available_count=GREATEST(available_count-1,0) WHERE id=?", [resource_id]);
 
+    req.io.emit('resource_updated', { resource_id, action: 'allocated' });
+
     res.status(201).json({ success: true, message: 'Resource allocated successfully.', id: result.insertId });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error.' });
@@ -70,6 +72,8 @@ router.put('/:id/release', authMiddleware, async (req, res) => {
 
     await db.query("UPDATE allocations SET status='released', end_time=NOW() WHERE id=?", [req.params.id]);
     await db.query("UPDATE resources SET status='Available', available_count=available_count+1 WHERE id=?", [alloc[0].resource_id]);
+
+    req.io.emit('resource_updated', { resource_id: alloc[0].resource_id, action: 'released' });
 
     res.json({ success: true, message: 'Resource released successfully.' });
   } catch (err) {
